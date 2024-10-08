@@ -18,17 +18,51 @@ def main():
     ## Load data to streams, header
     streams, header = pyxdf.load_xdf(dataFile)
 
-    eeg_stream_names = [str(ch["label"][0]) for ch in streams[0]["info"]["desc"][0]["channels"][0]["channel"]]
-    print(eeg_stream_names)
+    eegStreamNames = [str(ch["label"][0]) for ch in streams[0]["info"]["desc"][0]["channels"][0]["channel"]]
+    audioStreamName = [streams[1]["info"]["name"][0]]
 
     eeg = streams[0]["time_series"].T
-    eeg -= eeg[-1] # Reference to 5
     eeg *= 1e-6 / 50 / 2
-    print(streams[0].__repr__())
-    sfreq = float(streams[0]["info"]["nominal_srate"][0])
-    info = mne.create_info(eeg_stream_names, sfreq, ["eeg", "eeg", "eeg", "eeg", "eeg"])
-    raw = mne.io.RawArray(eeg, info)
-    raw.plot(scalings=dict(eeg=1e-6), duration=2, start=0, block=True)
+    eegSfreq = float(streams[0]["info"]["nominal_srate"][0])
+
+    eegInfo = mne.create_info(eegStreamNames, eegSfreq, ["eeg", "eeg", "eeg", "eeg", "eeg"])
+    eegRaw = mne.io.RawArray(eeg, eegInfo)
+    eegRaw = eegRaw.drop_channels("Right AUX") # We are not using this "electrode"
+
+    audio = streams[1]["time_series"].T
+    audioSfreq = float(streams[1]["info"]["nominal_srate"][0])
+
+    audioInfo = mne.create_info(audioStreamName, audioSfreq, ["misc"])
+    audioRaw = mne.io.RawArray(audio, audioInfo)
+
+
+    ## Preprocessing and envelope
+    audioRaw.apply_function(lambda x:  mne.baseline.rescale(data=x, times=audioRaw.times, baseline=(-1,1)), picks="all")
+
+    # Equalize length
+    #print("HONK", eegRaw.first_time, audioRaw.first_time )
+
+    eegRaw.filter(0.1, 15)
+
+    htAudio = audioRaw.copy()
+    htAudio.apply_hilbert(picks="all")
+
+    envAudio = htAudio.copy()
+    envAudio.apply_function(np.abs, dtype=np.dtype(np.float64), picks="all")
+
+    fEnvAudio = envAudio.copy()
+    fEnvAudio.filter(128, None, picks="all")
+    fEnvAudio.apply_function(lambda x: np.mean(x, axis=0, keepdims=True), channel_wise=False, picks="all")
+    fEnvAudio.apply_function(lambda x: mne.baseline.rescale(data=x, times=audioRaw.times, baseline=(0,1)), picks="all")
+
+    dsFEnvAudio = fEnvAudio.copy()
+    dsFEnvAudio.apply_function(lambda x: np.interp(x=eegRaw.times, xp=audioRaw.times, fp=x), picks="all")
+
+
+
+
+    fEnvAudio.plot(scalings=dict(misc=1e-3), duration=2, start=0, block=True)
+    eegRaw.plot(scalings=dict(eeg=1e-6), duration=2, start=0, block=True)
 
 
 if __name__ == "__main__":

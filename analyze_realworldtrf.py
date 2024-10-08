@@ -55,13 +55,15 @@ def main():
     fEnvAudio.apply_function(lambda x: np.mean(x, axis=0, keepdims=True), channel_wise=False, picks="all")
     fEnvAudio.apply_function(lambda x: mne.baseline.rescale(data=x, times=audioRaw.times, baseline=(0,1)), picks="all")
 
-    dsFEnvAudio = fEnvAudio.copy()
-    dsFEnvAudio.apply_function(lambda x: np.interp(x=eegRaw.times, xp=audioRaw.times, fp=x), picks="all")
+
+    #dsFEnvAudio = fEnvAudio.copy()
+    dsFEnvAudio = np.interp(x=eegRaw.times, xp=audioRaw.times, fp=audioRaw.get_data()[0])
 
 
 
 
-    fEnvAudio.plot(scalings=dict(misc=1e-3), duration=2, start=0, block=True)
+
+    fEnvAudio.plot(scalings=None, duration=2, start=0, block=True)
     eegRaw.plot(scalings=dict(eeg=1e-6), duration=2, start=0, block=True)
 
 

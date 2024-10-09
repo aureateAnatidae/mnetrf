@@ -40,27 +40,31 @@ def main():
     audioRaw.apply_function(lambda x:  mne.baseline.rescale(data=x, times=audioRaw.times, baseline=(-1,1)), picks="all")
 
     # Equalize length
-    #print("HONK", eegRaw.first_time, audioRaw.first_time )
-
-    eegRaw.filter(0.1, 15)
+    #print("HONK", eegRaw.first_time, audioRaw.first_time)
 
     htAudio = audioRaw.copy()
     htAudio.apply_hilbert(picks="all")
 
-    envAudio = htAudio.copy()
+    envAudio = htAudio
     envAudio.apply_function(np.abs, dtype=np.dtype(np.float64), picks="all")
 
-    fEnvAudio = envAudio.copy()
+    fEnvAudio = envAudio
     fEnvAudio.filter(128, None, picks="all")
     fEnvAudio.apply_function(lambda x: np.mean(x, axis=0, keepdims=True), channel_wise=False, picks="all")
     fEnvAudio.apply_function(lambda x: mne.baseline.rescale(data=x, times=audioRaw.times, baseline=(0,1)), picks="all")
 
+    ## We need to reshape the data (downsampled) so we need to create the RawArray from scratch.
+    #dsFEnvAudio = np.interp(x=eegRaw.times, xp=audioRaw.times, fp=audioRaw.get_data()[0])
+    dsFEnvAudio = fEnvAudio
+    dsFEnvAudio = dsFEnvAudio.resample(eegSfreq, events=eegRaw.get_data(picks="all"))[0]
 
-    #dsFEnvAudio = fEnvAudio.copy()
-    dsFEnvAudio = np.interp(x=eegRaw.times, xp=audioRaw.times, fp=audioRaw.get_data()[0])
 
+    ## TRF calculation
+    uEEG = eegRaw
 
-
+    uEEG.crop(tmax=dsFEnvAudio.times[-1])
+    uEEG.add_channels([dsFEnvAudio])
+    uEEG.filter(0.1, 15, picks="eeg")
 
 
     fEnvAudio.plot(scalings=None, duration=2, start=0, block=True)
